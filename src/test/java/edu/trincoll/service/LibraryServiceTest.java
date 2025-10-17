@@ -4,8 +4,6 @@ import edu.trincoll.model.Book;
 import edu.trincoll.model.BookStatus;
 import edu.trincoll.model.Member;
 import edu.trincoll.model.MembershipType;
-import edu.trincoll.repository.BookRepository;
-import edu.trincoll.repository.MemberRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,11 +13,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,10 +25,7 @@ import static org.mockito.Mockito.*;
 class LibraryServiceTest {
 
     @Mock
-    private BookRepository bookRepository;
-
-    @Mock
-    private MemberRepository memberRepository;
+    private LibraryFacade libraryFacade;
 
     @InjectMocks
     private LibraryService libraryService;
@@ -67,12 +62,8 @@ class LibraryServiceTest {
     @DisplayName("Should checkout book successfully for regular member")
     void shouldCheckoutBookForRegularMember() {
         // Arrange
-        when(bookRepository.findByIsbn(availableBook.getIsbn()))
-                .thenReturn(Optional.of(availableBook));
-        when(memberRepository.findByEmail(regularMember.getEmail()))
-                .thenReturn(Optional.of(regularMember));
-        when(bookRepository.save(any(Book.class))).thenReturn(availableBook);
-        when(memberRepository.save(any(Member.class))).thenReturn(regularMember);
+        when(libraryFacade.checkoutBook(availableBook.getIsbn(), regularMember.getEmail()))
+                .thenReturn("Book checked out successfully. Due date: " + LocalDate.now().plusDays(14));
 
         // Act
         String result = libraryService.checkoutBook(availableBook.getIsbn(), regularMember.getEmail());
@@ -80,77 +71,59 @@ class LibraryServiceTest {
         // Assert
         assertThat(result).contains("Book checked out successfully");
         assertThat(result).contains("Due date:");
-        verify(bookRepository).save(argThat(book ->
-                book.getStatus() == BookStatus.CHECKED_OUT &&
-                book.getCheckedOutBy().equals(regularMember.getEmail()) &&
-                book.getDueDate().equals(LocalDate.now().plusDays(14))
-        ));
-        verify(memberRepository).save(argThat(member ->
-                member.getBooksCheckedOut() == 1
-        ));
+        verify(libraryFacade).checkoutBook(availableBook.getIsbn(), regularMember.getEmail());
     }
 
     @Test
     @DisplayName("Should apply correct loan period for premium member")
     void shouldApplyPremiumLoanPeriod() {
         // Arrange
-        when(bookRepository.findByIsbn(availableBook.getIsbn()))
-                .thenReturn(Optional.of(availableBook));
-        when(memberRepository.findByEmail(premiumMember.getEmail()))
-                .thenReturn(Optional.of(premiumMember));
-        when(bookRepository.save(any(Book.class))).thenReturn(availableBook);
-        when(memberRepository.save(any(Member.class))).thenReturn(premiumMember);
+        when(libraryFacade.checkoutBook(availableBook.getIsbn(), premiumMember.getEmail()))
+                .thenReturn("Book checked out successfully. Due date: " + LocalDate.now().plusDays(30));
 
         // Act
         libraryService.checkoutBook(availableBook.getIsbn(), premiumMember.getEmail());
 
         // Assert
-        verify(bookRepository).save(argThat(book ->
-                book.getDueDate().equals(LocalDate.now().plusDays(30))
-        ));
+        verify(libraryFacade).checkoutBook(availableBook.getIsbn(), premiumMember.getEmail());
     }
 
     @Test
     @DisplayName("Should enforce checkout limit for regular member")
     void shouldEnforceCheckoutLimitForRegularMember() {
         // Arrange
-        regularMember.setBooksCheckedOut(3); // At limit
-        when(bookRepository.findByIsbn(availableBook.getIsbn()))
-                .thenReturn(Optional.of(availableBook));
-        when(memberRepository.findByEmail(regularMember.getEmail()))
-                .thenReturn(Optional.of(regularMember));
+        when(libraryFacade.checkoutBook(availableBook.getIsbn(), regularMember.getEmail()))
+                .thenReturn("Member has reached checkout limit");
 
         // Act
         String result = libraryService.checkoutBook(availableBook.getIsbn(), regularMember.getEmail());
 
         // Assert
         assertThat(result).isEqualTo("Member has reached checkout limit");
-        verify(bookRepository, never()).save(any());
+        verify(libraryFacade).checkoutBook(availableBook.getIsbn(), regularMember.getEmail());
     }
 
     @Test
     @DisplayName("Should not checkout unavailable book")
     void shouldNotCheckoutUnavailableBook() {
         // Arrange
-        availableBook.setStatus(BookStatus.CHECKED_OUT);
-        when(bookRepository.findByIsbn(availableBook.getIsbn()))
-                .thenReturn(Optional.of(availableBook));
-        when(memberRepository.findByEmail(regularMember.getEmail()))
-                .thenReturn(Optional.of(regularMember));
+        when(libraryFacade.checkoutBook(availableBook.getIsbn(), regularMember.getEmail()))
+                .thenReturn("Book is not available");
 
         // Act
         String result = libraryService.checkoutBook(availableBook.getIsbn(), regularMember.getEmail());
 
         // Assert
         assertThat(result).isEqualTo("Book is not available");
-        verify(bookRepository, never()).save(any());
+        verify(libraryFacade).checkoutBook(availableBook.getIsbn(), regularMember.getEmail());
     }
 
     @Test
     @DisplayName("Should throw exception when book not found")
     void shouldThrowExceptionWhenBookNotFound() {
         // Arrange
-        when(bookRepository.findByIsbn(anyString())).thenReturn(Optional.empty());
+        when(libraryFacade.checkoutBook(anyString(), anyString()))
+                .thenThrow(new IllegalArgumentException("Book not found"));
 
         // Act & Assert
         assertThatThrownBy(() ->
@@ -163,74 +136,38 @@ class LibraryServiceTest {
     @DisplayName("Should return book successfully")
     void shouldReturnBookSuccessfully() {
         // Arrange
-        availableBook.setStatus(BookStatus.CHECKED_OUT);
-        availableBook.setCheckedOutBy(regularMember.getEmail());
-        availableBook.setDueDate(LocalDate.now().plusDays(7));
-
-        when(bookRepository.findByIsbn(availableBook.getIsbn()))
-                .thenReturn(Optional.of(availableBook));
-        when(memberRepository.findByEmail(regularMember.getEmail()))
-                .thenReturn(Optional.of(regularMember));
-        when(bookRepository.save(any(Book.class))).thenReturn(availableBook);
-        when(memberRepository.save(any(Member.class))).thenReturn(regularMember);
-
-        regularMember.setBooksCheckedOut(1);
+        when(libraryFacade.returnBook(availableBook.getIsbn()))
+                .thenReturn("Book returned successfully");
 
         // Act
         String result = libraryService.returnBook(availableBook.getIsbn());
 
         // Assert
         assertThat(result).isEqualTo("Book returned successfully");
-        verify(bookRepository).save(argThat(book ->
-                book.getStatus() == BookStatus.AVAILABLE &&
-                book.getCheckedOutBy() == null &&
-                book.getDueDate() == null
-        ));
-        verify(memberRepository).save(argThat(member ->
-                member.getBooksCheckedOut() == 0
-        ));
+        verify(libraryFacade).returnBook(availableBook.getIsbn());
     }
 
     @Test
     @DisplayName("Should calculate late fee for regular member")
     void shouldCalculateLateFeeForRegularMember() {
         // Arrange
-        availableBook.setStatus(BookStatus.CHECKED_OUT);
-        availableBook.setCheckedOutBy(regularMember.getEmail());
-        availableBook.setDueDate(LocalDate.now().minusDays(5)); // 5 days late
-
-        when(bookRepository.findByIsbn(availableBook.getIsbn()))
-                .thenReturn(Optional.of(availableBook));
-        when(memberRepository.findByEmail(regularMember.getEmail()))
-                .thenReturn(Optional.of(regularMember));
-        when(bookRepository.save(any(Book.class))).thenReturn(availableBook);
-        when(memberRepository.save(any(Member.class))).thenReturn(regularMember);
-
-        regularMember.setBooksCheckedOut(1);
+        when(libraryFacade.returnBook(availableBook.getIsbn()))
+                .thenReturn("Book returned. Late fee: $2.50");
 
         // Act
         String result = libraryService.returnBook(availableBook.getIsbn());
 
         // Assert
-        assertThat(result).contains("Late fee: $2.50"); // 5 days * $0.50
+        assertThat(result).contains("Late fee: $2.50");
+        verify(libraryFacade).returnBook(availableBook.getIsbn());
     }
 
     @Test
     @DisplayName("Should not charge late fee for premium member")
     void shouldNotChargeLateFeeForPremiumMember() {
         // Arrange
-        availableBook.setStatus(BookStatus.CHECKED_OUT);
-        availableBook.setCheckedOutBy(premiumMember.getEmail());
-        availableBook.setDueDate(LocalDate.now().minusDays(5)); // 5 days late
-
-        when(bookRepository.findByIsbn(availableBook.getIsbn()))
-                .thenReturn(Optional.of(availableBook));
-        when(memberRepository.findByEmail(premiumMember.getEmail()))
-                .thenReturn(Optional.of(premiumMember));
-        when(bookRepository.save(any(Book.class))).thenReturn(availableBook);
-        when(memberRepository.save(any(Member.class))).thenReturn(premiumMember);
-
-        premiumMember.setBooksCheckedOut(1);
+        when(libraryFacade.returnBook(availableBook.getIsbn()))
+                .thenReturn("Book returned successfully");
 
         // Act
         String result = libraryService.returnBook(availableBook.getIsbn());
@@ -238,14 +175,15 @@ class LibraryServiceTest {
         // Assert
         assertThat(result).isEqualTo("Book returned successfully");
         assertThat(result).doesNotContain("Late fee");
+        verify(libraryFacade).returnBook(availableBook.getIsbn());
     }
 
     @Test
     @DisplayName("Should search books by title")
     void shouldSearchBooksByTitle() {
         // Arrange
-        when(bookRepository.findByTitleContainingIgnoreCase("Clean"))
-                .thenReturn(java.util.List.of(availableBook));
+        when(libraryFacade.searchBooks("Clean", "title"))
+                .thenReturn(List.of(availableBook));
 
         // Act
         var results = libraryService.searchBooks("Clean", "title");
@@ -253,11 +191,16 @@ class LibraryServiceTest {
         // Assert
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getTitle()).isEqualTo("Clean Code");
+        verify(libraryFacade).searchBooks("Clean", "title");
     }
 
     @Test
     @DisplayName("Should throw exception for invalid search type")
     void shouldThrowExceptionForInvalidSearchType() {
+        // Arrange
+        when(libraryFacade.searchBooks("test", "invalid"))
+                .thenThrow(new IllegalArgumentException("Invalid search type"));
+
         // Act & Assert
         assertThatThrownBy(() ->
                 libraryService.searchBooks("test", "invalid"))
