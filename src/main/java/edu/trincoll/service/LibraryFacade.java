@@ -187,35 +187,5 @@ public class LibraryFacade {
         return memberReportGenerator.generateReport();
     }
 
-    /**
-     * Search books with generic search
-     */
-    public List<Book> searchBooks(String searchTerm, String searchType) {
-        if ("title".equalsIgnoreCase(searchType)) {
-            return searchByTitle(searchTerm);
-        } else if ("author".equalsIgnoreCase(searchType)) {
-            return searchByAuthor(searchTerm);
-        } else if ("isbn".equalsIgnoreCase(searchType)) {
-            return searchByIsbn(searchTerm)
-                    .map(List::of)
-                    .orElse(List.of());
-        } else {
-            throw new IllegalArgumentException("Invalid search type");
-        }
-    }
 
-    /**
-     * Generate reports with generic type
-     */
-    public String generateReport(String reportType) {
-        if ("overdue".equalsIgnoreCase(reportType)) {
-            return generateOverdueReport();
-        } else if ("available".equalsIgnoreCase(reportType)) {
-            return generateAvailabilityReport();
-        } else if ("members".equalsIgnoreCase(reportType)) {
-            return generateMembersReport();
-        } else {
-            throw new IllegalArgumentException("Invalid report type");
-        }
-    }
-}
+
