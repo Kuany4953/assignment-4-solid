@@ -14,8 +14,3 @@ public class RegularLateFeeCalculator implements TypedLateFeeCalculator {
         return MembershipType.REGULAR;
     }
 
-    @Override
-    public double calculateLateFee(long daysLate) {
-        return daysLate * 0.50;
-    }
-}
