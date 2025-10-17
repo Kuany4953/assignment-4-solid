@@ -25,3 +25,18 @@ public class BookSearchService {
     public List<Book> searchByTitle(String title) {
         return bookRepository.findByTitleContainingIgnoreCase(title);
     }
+
+    /**
+     * Search for books by author
+     */
+    public List<Book> searchByAuthor(String author) {
+        return bookRepository.findByAuthor(author);
+    }
+
+    /**
+     * Search for a book by ISBN
+     */
+    public Optional<Book> searchByIsbn(String isbn) {
+        return bookRepository.findByIsbn(isbn);
+    }
+}
