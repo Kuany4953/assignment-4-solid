@@ -21,3 +21,14 @@ public class LateFeeCalculatorFactory {
         }
     }
 
+    /**
+     * Get the appropriate LateFeeCalculator for a membership type
+     */
+    public LateFeeCalculator getCalculatorFor(MembershipType type) {
+        LateFeeCalculator calculator = byType.get(type);
+        if (calculator == null) {
+            throw new IllegalArgumentException("No LateFeeCalculator registered for membership type: " + type);
+        }
+        return calculator;
+    }
+}
